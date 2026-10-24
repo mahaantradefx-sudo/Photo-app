@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<title>Sign Placer</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --line:#334155; --txt:#e2e8f0; --mute:#94a3b8;
+    --acc:#38bdf8; --acc2:#0ea5e9; --danger:#f87171;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  [hidden]{display:none!important}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #app{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;
+    padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;
+    border-bottom:1px solid var(--line)}
+  header h1{font-size:18px;margin:0;font-weight:700}
+  button{font:inherit;color:var(--txt);background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;cursor:pointer}
+  button:active{transform:scale(.97)}
+  button.primary{background:var(--acc2);border-color:var(--acc2);color:#00131f;font-weight:700}
+  button:disabled{opacity:.4;pointer-events:none}
+  button.danger{color:var(--danger)}
+  button.on{border-color:var(--acc);background:#0b3a52}
+  #stage{position:relative;min-height:0;display:flex;align-items:center;justify-content:center;
+    padding:10px;background:
+    repeating-conic-gradient(#172033 0% 25%, #131c2e 0% 50%) 50% / 24px 24px}
+  #cv{width:auto;height:auto;max-width:100%;max-height:100%;touch-action:none;
+    background:#fff;box-shadow:0 6px 30px rgba(0,0,0,.5);border-radius:2px}
+  #empty{text-align:center;color:var(--mute);line-height:1.6;padding:20px}
+  #empty .big{font-size:56px}
+  #panel{border-top:1px solid var(--line);background:var(--bg);padding:10px 12px 12px;
+    max-height:44dvh;overflow-y:auto}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .row>button{flex:1 1 0;min-width:0;white-space:nowrap}
+  .ctl{display:grid;grid-template-columns:76px 1fr 48px;align-items:center;gap:8px;margin-bottom:8px;
+    font-size:14px}
+  .ctl label{color:var(--mute)}
+  .ctl output{text-align:right;color:var(--mute);font-variant-numeric:tabular-nums;font-size:13px}
+  input[type=range]{width:100%;accent-color:var(--acc)}
+  .chips{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap;font-size:14px}
+  .chips span.l{color:var(--mute);width:76px}
+  .chips button{padding:7px 12px}
+  .nudge{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .nudge button{flex:1 1 40px;padding:8px 0;text-align:center}
+  select{font:inherit;color:var(--txt);background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:8px}
+  .chk{display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:8px}
+  .chk input{width:18px;height:18px;accent-color:var(--acc)}
+  #toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 90px);transform:translateX(-50%);
+    background:#020617;border:1px solid var(--line);padding:10px 16px;border-radius:999px;
+    font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw;text-align:center;z-index:50}
+  #toast.show{opacity:1}
+  #modal{position:fixed;inset:0;background:rgba(2,6,23,.85);display:flex;align-items:center;
+    justify-content:center;padding:14px;z-index:40}
+  #modal .box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;
+    width:100%;max-width:560px}
+  #modal h2{margin:0 0 10px;font-size:16px}
+  #padcv{width:100%;aspect-ratio:900/360;background:#f8fafc;border-radius:10px;touch-action:none;display:block;
+    background-image:linear-gradient(transparent calc(100% - 52px),#cbd5e1 calc(100% - 52px),#cbd5e1 calc(100% - 51px),transparent calc(100% - 51px))}
+  .hint{color:var(--mute);font-size:12px;margin:6px 0 0}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>✍️ Sign Placer</h1>
+    <button id="btnSave" class="primary" disabled>💾 Save</button>
+  </header>
+
+  <main id="stage">
+    <div id="empty">
+      <div class="big">📄</div>
+      Mudhalla document image upload pannunga<br>
+      <button id="btnDocEmpty" class="primary" style="margin-top:12px">Upload document</button>
+    </div>
+    <canvas id="cv" hidden></canvas>
+  </main>
+
+  <section id="panel">
+    <div class="row">
+      <button id="btnDoc">📄 Document</button>
+      <button id="btnSig">🖼️ Signature</button>
+      <button id="btnDraw">✏️ Draw sign</button>
+    </div>
+
+    <div id="tools" hidden>
+      <div class="ctl"><label for="size">Size</label><input id="size" type="range" min="3" max="100" step="0.5" value="25"><output id="sizeO"></output></div>
+      <div class="ctl"><label for="rot">Rotate</label><input id="rot" type="range" min="-180" max="180" step="1" value="0"><output id="rotO"></output></div>
+
+      <div class="nudge">
+        <button id="nL">◀</button><button id="nU">▲</button><button id="nD">▼</button><button id="nR">▶</button>
+        <button id="btnCenter">Center</button>
+      </div>
+
+      <div class="chips"><span class="l">Ink</span>
+        <button data-ink="original" class="on">Original</button>
+        <button data-ink="black">Black</button>
+        <button data-ink="blue">Blue</button>
+      </div>
+
+      <div class="chk"><input id="rm" type="checkbox" checked><label for="rm">White background remove (transparent)</label></div>
+      <div class="ctl" id="thrRow"><label for="thr">Clean-up</label><input id="thr" type="range" min="0" max="100" step="1" value="40"><output id="thrO"></output></div>
+
+      <div class="chips"><span class="l">Save as</span>
+        <select id="fmt"><option value="png">PNG (best quality)</option><option value="jpg">JPG</option></select>
+        <button id="btnDel" class="danger">Remove sign</button>
+      </div>
+      <p class="hint">Tip: 1 finger = move · 2 fingers = zoom &amp; rotate</p>
+    </div>
+  </section>
+</div>
+
+<input id="fDoc" type="file" accept="image/*" hidden>
+<input id="fSig" type="file" accept="image/*" hidden>
+
+<div id="modal" hidden>
+  <div class="box">
+    <h2>✏️ Inga sign pannunga</h2>
+    <canvas id="padcv" width="900" height="360"></canvas>
+    <div class="chips" style="margin:10px 0 0">
+      <span class="l" style="width:auto">Pen</span>
+      <button data-pen="#111111" class="on">Black</button>
+      <button data-pen="#1a3fd6">Blue</button>
+    </div>
+    <div class="row" style="margin:12px 0 0">
+      <button id="padClear">Clear</button>
+      <button id="padCancel">Cancel</button>
+      <button id="padUse" class="primary">Use this</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var cv = $('cv'), ctx = cv.getContext('2d');
+  var MAX_DOC = 5000;   // max side of document (keeps phone memory safe)
+  var MAX_SIG = 1600;   // max side of signature source
+
+  var S = {
+    doc: null,        // document canvas
+    src: null,        // signature source canvas (as uploaded / drawn)
+    base: null,       // processed signature (transparent, cropped)
+    tinted: null,     // base recolored per ink choice
+    ratio: 1,         // height / width of signature
+    x: 0, y: 0, w: 0, rot: 0,
+    ink: 'original', rm: true, thr: 40, bg: null
+  };
+
+  /* ---------- helpers ---------- */
+  var toastTimer;
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+  function loadImage(file) {
+    return new Promise(function (res, rej) {
+      var u = URL.createObjectURL(file), im = new Image();
+      im.onload = function () { res({ im: im, u: u }); };
+      im.onerror = function () { URL.revokeObjectURL(u); rej(new Error('Image open aagala')); };
+      im.src = u;
+    });
+  }
+  function toCanvas(im, maxSide) {
+    var w = im.naturalWidth, h = im.naturalHeight, k = Math.min(1, maxSide / Math.max(w, h));
+    var c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    var g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+    g.drawImage(im, 0, 0, c.width, c.height);
+    return c;
+  }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+  /* ---------- document ---------- */
+  function onDoc(file) {
+    loadImage(file).then(function (r) {
+      S.doc = toCanvas(r.im, MAX_DOC); URL.revokeObjectURL(r.u);
+      cv.width = S.doc.width; cv.height = S.doc.height;
+      cv.hidden = false; $('empty').hidden = true;
+      placeDefault(); refreshState(); render();
+    }).catch(function (e) { toast(e.message); });
+  }
+  function placeDefault() {
+    if (!S.doc) return;
+    S.w = S.doc.width * 0.25; S.x = S.doc.width * 0.7; S.y = S.doc.height * 0.85; S.rot = 0;
+    syncUI();
+  }
+
+  /* ---------- signature ---------- */
+  function onSig(file) {
+    loadImage(file).then(function (r) {
+      var c = toCanvas(r.im, MAX_SIG); URL.revokeObjectURL(r.u);
+      setSigSource(c, true);
+    }).catch(function (e) { toast(e.message); });
+  }
+  function hasRealAlpha(c) {
+    var d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data, n = 0, tot = c.width * c.height;
+    for (var i = 3; i < d.length; i += 4) if (d[i] < 10) n++;
+    return n / tot > 0.02;
+  }
+  function setSigSource(c, detect) {
+    S.src = c; S.bg = null;
+    if (detect) {
+      S.rm = !hasRealAlpha(c);     // already transparent PNG -> leave as is
+    } else { S.rm = false; }
+    $('rm').checked = S.rm;
+    var first = !S.tinted;
+    rebuildSig();
+    if (first && S.doc) placeDefault();
+    refreshState();
+  }
+
+  /* Estimate the paper colour at every pixel (handles yellow paper, shadows, uneven light):
+     take the bright (85th percentile) colour of each block, smooth it, scale up. */
+  function computeBg(c) {
+    var W = c.width, H = c.height;
+    var gx = clamp(Math.round(W / 60), 3, 32), gy = clamp(Math.round(H / 60), 3, 32);
+    var d = c.getContext('2d').getImageData(0, 0, W, H).data;
+    var hist = new Uint32Array(gx * gy * 768), cnt = new Uint32Array(gx * gy);
+    for (var y = 0; y < H; y++) {
+      var by = Math.min(gy - 1, (y * gy / H) | 0);
+      for (var x = 0; x < W; x++) {
+        var b = by * gx + Math.min(gx - 1, (x * gx / W) | 0), i = (y * W + x) * 4, h = b * 768;
+        cnt[b]++; hist[h + d[i]]++; hist[h + 256 + d[i + 1]]++; hist[h + 512 + d[i + 2]]++;
+      }
+    }
+    var grid = new Float32Array(gx * gy * 3);
+    for (var b2 = 0; b2 < gx * gy; b2++) {
+      var target = cnt[b2] * 0.85;
+      for (var ch = 0; ch < 3; ch++) {
+        var acc = 0, v = 255, base = b2 * 768 + ch * 256;
+        for (var k = 0; k < 256; k++) { acc += hist[base + k]; if (acc >= target) { v = k; break; } }
+        grid[b2 * 3 + ch] = v;
+      }
+    }
+    for (var pass = 0; pass < 2; pass++) {            // 3x3 box blur
+      var out = new Float32Array(grid.length);
+      for (var yy = 0; yy < gy; yy++) for (var xx = 0; xx < gx; xx++) for (var c3 = 0; c3 < 3; c3++) {
+        var s = 0, n = 0;
+        for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+          var ny = yy + dy, nx = xx + dx;
+          if (ny < 0 || ny >= gy || nx < 0 || nx >= gx) continue;
+          s += grid[(ny * gx + nx) * 3 + c3]; n++;
+        }
+        out[(yy * gx + xx) * 3 + c3] = s / n;
+      }
+      grid = out;
+    }
+    var small = document.createElement('canvas'); small.width = gx; small.height = gy;
+    var sg = small.getContext('2d'), sid = sg.createImageData(gx, gy);
+    for (var j = 0; j < gx * gy; j++) {
+      sid.data[j * 4] = grid[j * 3]; sid.data[j * 4 + 1] = grid[j * 3 + 1];
+      sid.data[j * 4 + 2] = grid[j * 3 + 2]; sid.data[j * 4 + 3] = 255;
+    }
+    sg.putImageData(sid, 0, 0);
+    var big = document.createElement('canvas'); big.width = W; big.height = H;
+    var bgx = big.getContext('2d', { willReadFrequently: true });
+    bgx.imageSmoothingEnabled = true; bgx.imageSmoothingQuality = 'high';
+    bgx.drawImage(small, 0, 0, W, H);
+    return bgx.getImageData(0, 0, W, H).data;
+  }
+
+  var rafPending = false;
+  function rebuildSoon() {
+    if (rafPending) return; rafPending = true;
+    requestAnimationFrame(function () { rafPending = false; rebuildSig(); });
+  }
+  function rebuildSig() {
+    if (!S.src) return;
+    var s = S.src, c = document.createElement('canvas');
+    c.width = s.width; c.height = s.height;
+    var x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(s, 0, 0);
+    var id = x.getImageData(0, 0, c.width, c.height), d = id.data, W = c.width;
+    var minX = W, minY = c.height, maxX = -1, maxY = -1;
+    var bg = null, lo = 0.05 + S.thr / 100 * 0.25, hi = lo + 0.25;
+    if (S.rm) { if (!S.bg) S.bg = computeBg(s); bg = S.bg; }
+    for (var i = 0, p = 0; i < d.length; i += 4, p++) {
+      if (bg) {
+        var nr = Math.min(1, d[i] / Math.max(bg[i], 40));
+        var ng = Math.min(1, d[i + 1] / Math.max(bg[i + 1], 40));
+        var nb = Math.min(1, d[i + 2] / Math.max(bg[i + 2], 40));
+        var dk = 1 - (0.299 * nr + 0.587 * ng + 0.114 * nb);          // how much darker than paper
+        var t = clamp((dk - lo) / (hi - lo), 0, 1), a = t * t * (3 - 2 * t);
+        if (a > 0.003) {                                               // recover real pen colour
+          d[i] = clamp((nr - (1 - a)) / a, 0, 1) * 255;
+          d[i + 1] = clamp((ng - (1 - a)) / a, 0, 1) * 255;
+          d[i + 2] = clamp((nb - (1 - a)) / a, 0, 1) * 255;
+        }
+        d[i + 3] = Math.round(d[i + 3] * a);
+      }
+      if (d[i + 3] > 8) {
+        var px = p % W, py = (p / W) | 0;
+        if (px < minX) minX = px; if (px > maxX) maxX = px;
+        if (py < minY) minY = py; if (py > maxY) maxY = py;
+      }
+    }
+    x.putImageData(id, 0, 0);
+    if (maxX < 0) {
+      toast('Sign theriyala - Clean-up slider-ah kuraingunga');
+      S.base = c;
+    } else {
+      var pad = 3; minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+      maxX = Math.min(W - 1, maxX + pad); maxY = Math.min(c.height - 1, maxY + pad);
+      var cw = maxX - minX + 1, ch = maxY - minY + 1, o = document.createElement('canvas');
+      o.width = cw; o.height = ch;
+      o.getContext('2d').drawImage(c, minX, minY, cw, ch, 0, 0, cw, ch);
+      S.base = o;
+    }
+    S.ratio = S.base.height / S.base.width;
+    tint(); render();
+  }
+  function tint() {
+    if (!S.base) return;
+    if (S.ink === 'original') { S.tinted = S.base; return; }
+    var c = document.createElement('canvas'); c.width = S.base.width; c.height = S.base.height;
+    var g = c.getContext('2d');
+    g.fillStyle = S.ink === 'black' ? '#111111' : '#1a3fd6';
+    g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(S.base, 0, 0);
+    S.tinted = c;
+  }
+
+  /* ---------- render ---------- */
+  function draw(g, ui) {
+    g.clearRect(0, 0, g.canvas.width, g.canvas.height);
+    g.drawImage(S.doc, 0, 0);
+    if (!S.tinted) return;
+    var w = S.w, h = w * S.ratio;
+    g.save();
+    g.translate(S.x, S.y); g.rotate(S.rot * Math.PI / 180);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(S.tinted, -w / 2, -h / 2, w, h);
+    if (ui) {
+      var lw = Math.max(2, S.doc.width / 400), pd = lw * 3;
+      g.strokeStyle = '#38bdf8'; g.lineWidth = lw; g.setLineDash([lw * 4, lw * 3]);
+      g.strokeRect(-w / 2 - pd, -h / 2 - pd, w + pd * 2, h + pd * 2);
+    }
+    g.restore();
+  }
+  function render() { if (S.doc) draw(ctx, true); }
+
+  /* ---------- UI state ---------- */
+  function refreshState() {
+    $('tools').hidden = !S.src;
+    $('btnSave').disabled = !(S.doc && S.tinted);
+    $('thrRow').hidden = !S.rm;
+  }
+  function syncUI() {
+    if (!S.doc) return;
+    var pct = S.w / S.doc.width * 100;
+    $('size').value = pct; $('sizeO').textContent = Math.round(pct) + '%';
+    $('rot').value = Math.round(S.rot); $('rotO').textContent = Math.round(S.rot) + '°';
+    $('thrO').textContent = S.thr;
+  }
+
+  /* ---------- gestures (1 finger move, 2 finger zoom+rotate) ---------- */
+  var ptrs = new Map(), gst = null;
+  function pt(e) {
+    var r = cv.getBoundingClientRect(), k = cv.width / r.width;
+    return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k };
+  }
+  function dist(p, q) { return Math.hypot(q.x - p.x, q.y - p.y); }
+  function ang(p, q) { return Math.atan2(q.y - p.y, q.x - p.x); }
+  function mid(p, q) { return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }; }
+  function startG() {
+    var a = Array.from(ptrs.values());
+    if (a.length === 1) gst = { t: 'drag', p: a[0], x: S.x, y: S.y };
+    else if (a.length >= 2) {
+      var p = a[0], q = a[1];
+      gst = { t: 'pinch', d: dist(p, q) || 1, a: ang(p, q), m: mid(p, q), w: S.w, rot: S.rot, x: S.x, y: S.y };
+    }
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    if (!S.tinted) return;
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    ptrs.set(e.pointerId, pt(e)); startG(); e.preventDefault();
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!ptrs.has(e.pointerId) || !gst) return;
+    ptrs.set(e.pointerId, pt(e));
+    var a = Array.from(ptrs.values());
+    if (gst.t === 'drag' && a.length === 1) {
+      S.x = gst.x + a[0].x - gst.p.x; S.y = gst.y + a[0].y - gst.p.y;
+    } else if (gst.t === 'pinch' && a.length >= 2) {
+      var p = a[0], q = a[1], m = mid(p, q);
+      S.w = clamp(gst.w * dist(p, q) / gst.d, S.doc.width * 0.01, S.doc.width * 1.5);
+      var r = gst.rot + (ang(p, q) - gst.a) * 180 / Math.PI;
+      while (r > 180) r -= 360; while (r < -180) r += 360;
+      S.rot = r; S.x = gst.x + m.x - gst.m.x; S.y = gst.y + m.y - gst.m.y;
+    }
+    syncUI(); render(); e.preventDefault();
+  });
+  function endP(e) { ptrs.delete(e.pointerId); if (ptrs.size) startG(); else gst = null; }
+  cv.addEventListener('pointerup', endP);
+  cv.addEventListener('pointercancel', endP);
+  cv.addEventListener('wheel', function (e) {
+    if (!S.tinted) return; e.preventDefault();
+    S.w = clamp(S.w * (e.deltaY < 0 ? 1.05 : 0.95), S.doc.width * 0.01, S.doc.width * 1.5);
+    syncUI(); render();
+  }, { passive: false });
+
+  /* ---------- controls ---------- */
+  $('size').addEventListener('input', function () {
+    if (!S.doc) return; S.w = S.doc.width * parseFloat(this.value) / 100; syncUI(); render();
+  });
+  $('rot').addEventListener('input', function () { S.rot = parseFloat(this.value); syncUI(); render(); });
+  $('thr').addEventListener('input', function () { S.thr = parseInt(this.value, 10); syncUI(); rebuildSoon(); });
+  $('rm').addEventListener('change', function () { S.rm = this.checked; refreshState(); rebuildSig(); });
+  document.querySelectorAll('[data-ink]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      S.ink = b.getAttribute('data-ink');
+      document.querySelectorAll('[data-ink]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      tint(); render();
+    });
+  });
+  function nudge(dx, dy) {
+    if (!S.doc) return; var st = S.doc.width * 0.003;
+    S.x += dx * st; S.y += dy * st; render();
+  }
+  $('nL').onclick = function () { nudge(-1, 0); };
+  $('nR').onclick = function () { nudge(1, 0); };
+  $('nU').onclick = function () { nudge(0, -1); };
+  $('nD').onclick = function () { nudge(0, 1); };
+  $('btnCenter').onclick = function () { if (S.doc) { S.x = S.doc.width / 2; S.y = S.doc.height / 2; render(); } };
+  $('btnDel').onclick = function () {
+    S.src = S.base = S.tinted = null; S.w = 0; refreshState(); render();
+    if (S.doc) placeDefault();
+  };
+
+  /* ---------- file pickers ---------- */
+  function pick(inp, fn) {
+    inp.onchange = function () { var f = inp.files && inp.files[0]; inp.value = ''; if (f) fn(f); };
+  }
+  pick($('fDoc'), onDoc); pick($('fSig'), onSig);
+  $('btnDoc').onclick = $('btnDocEmpty').onclick = function () { $('fDoc').click(); };
+  $('btnSig').onclick = function () { $('fSig').click(); };
+
+  /* ---------- draw signature pad ---------- */
+  var pad = $('padcv'), pg = pad.getContext('2d');
+  var drawing = false, last = null, lastMid = null, penColor = '#111111', dirty = false;
+  function pp(e) {
+    var r = pad.getBoundingClientRect(), k = pad.width / r.width;
+    return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k };
+  }
+  function padStyle() { pg.lineCap = 'round'; pg.lineJoin = 'round'; pg.lineWidth = 5; pg.strokeStyle = penColor; pg.fillStyle = penColor; }
+  pad.addEventListener('pointerdown', function (e) {
+    drawing = true; try { pad.setPointerCapture(e.pointerId); } catch (_) {}
+    last = pp(e); lastMid = last; padStyle();
+    pg.beginPath(); pg.arc(last.x, last.y, 2.5, 0, Math.PI * 2); pg.fill(); dirty = true; e.preventDefault();
+  });
+  pad.addEventListener('pointermove', function (e) {
+    if (!drawing) return;
+    var p = pp(e), m = { x: (last.x + p.x) / 2, y: (last.y + p.y) / 2 };
+    padStyle(); pg.beginPath(); pg.moveTo(lastMid.x, lastMid.y);
+    pg.quadraticCurveTo(last.x, last.y, m.x, m.y); pg.stroke();
+    lastMid = m; last = p; e.preventDefault();
+  });
+  ['pointerup', 'pointercancel'].forEach(function (n) { pad.addEventListener(n, function () { drawing = false; }); });
+  $('btnDraw').onclick = function () { $('modal').hidden = false; };
+  $('padClear').onclick = function () { pg.clearRect(0, 0, pad.width, pad.height); dirty = false; };
+  $('padCancel').onclick = function () { $('modal').hidden = true; };
+  $('padUse').onclick = function () {
+    if (!dirty) { toast('Mudhalla sign pannunga'); return; }
+    var c = document.createElement('canvas'); c.width = pad.width; c.height = pad.height;
+    c.getContext('2d').drawImage(pad, 0, 0);
+    $('modal').hidden = true; setSigSource(c, false);
+  };
+  document.querySelectorAll('[data-pen]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      penColor = b.getAttribute('data-pen');
+      document.querySelectorAll('[data-pen]').forEach(function (x) { x.classList.toggle('on', x === b); });
+    });
+  });
+
+  /* ---------- save / share (full original resolution) ---------- */
+  $('btnSave').onclick = function () {
+    if (!(S.doc && S.tinted)) return;
+    var fmt = $('fmt').value, mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
+    var c = document.createElement('canvas'); c.width = S.doc.width; c.height = S.doc.height;
+    var g = c.getContext('2d');
+    if (fmt === 'jpg') { g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); }
+    draw(g, false);
+    var name = 'signed-' + Date.now() + '.' + fmt;
+    var cap = window.Capacitor;
+    var native = cap && cap.isNativePlatform && cap.isNativePlatform();
+    var P = cap && cap.Plugins;
+    if (native && P && P.Filesystem && P.Share) {
+      var data = c.toDataURL(mime, 0.95).split(',')[1];
+      P.Filesystem.writeFile({ path: name, data: data, directory: 'CACHE' }).then(function (r) {
+        return P.Share.share({ title: 'Signed document', url: r.uri, dialogTitle: 'Save / Share' });
+      }).catch(function (e) {
+        if (e && /cancel/i.test(String(e.message || e))) return;
+        toast('Save aagala: ' + (e && e.message ? e.message : e));
+      });
+    } else {
+      c.toBlob(function (b) {
+        var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        toast('Download aachu ✅');
+      }, mime, 0.95);
+    }
+  };
+
+  syncUI(); refreshState();
+})();
+</script>
+</body>
+</html>
